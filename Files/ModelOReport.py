@@ -106,6 +106,7 @@ def get_battery_status(forcePushNotification = True):
     else:
         logOnline(f"unknown status : [1:{bfr_r[1]:02X}, 6:{bfr_r[6]:02X}, 8:{bfr_r[8]:02X}]")
 
+    global batteryReportStage
     if(forcePushNotification or (currentReportStage != -1 and currentReportStage != batteryReportStage)):
         batteryReportStage = currentReportStage
         toast("Wireless Mouse Battery", displaymessage, duration='short')
