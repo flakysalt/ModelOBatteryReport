@@ -1,1 +1,3 @@
 
+2023-12-16 17:05:10 - Sylvia - Start Program 
+2023-12-16 17:05:12 - Sylvia - local variable 'batteryReportStage' referenced before assignment 
