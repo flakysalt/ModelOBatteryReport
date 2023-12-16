@@ -1,13 +1,17 @@
 import time
-import subprocess
 import requests
 import base64
 import datetime
 import getpass
+import pystray
+import os
+import threading
+import hid
+from PIL import Image
 
-from win10toast import ToastNotifier
+from win11toast import toast
 
-batteryReportStage = 0
+batteryReportStage = -1
 
 REPO_OWNER="flakysalt"
 REPO_NAME="ModelOLogging"
@@ -15,85 +19,100 @@ FILE_PATH="Log.txt"
 GITHUB_TOKEN="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"
 
 
-def display_notification(percentage):
-    logErrorOnline("show low battery toast")
-    toaster = ToastNotifier()
-    toaster.show_toast("Wireless Mouse Battery", "Low Battery! Please charge soon({}%)".format(percentage), duration=5, icon_path = "Icon.ico")
+def find_device():
+    # Define the criteria
+    vendor_id = 0x258A  # Glorious' vendor id
+    product_ids = [0x2011, 0x2022]  # Model O product ids
+    interface_number = 2  # Feature report interface
 
-def display_notification_critical(percentage):
-    logErrorOnline("show critical battery toast")
-    toaster = ToastNotifier()
-    toaster.show_toast("Wireless Mouse Battery", "Very low Battery! Charge ASAP ({}%)".format(percentage), duration=5, icon_path = "Icon.ico")
+    # Get all connected HID devices
+    all_devices = hid.enumerate()
+
+    # Filter devices based on the criteria
+    matching_devices = [
+        d for d in all_devices
+        if d['vendor_id'] == vendor_id and
+        d['product_id'] in product_ids and
+        d['interface_number'] == interface_number
+    ]
+
+    # Sort devices by product_id
+    matching_devices.sort(key=lambda d: d['product_id'])
+
+    # Return the first matching device or None if no device is found
+    return matching_devices[0] if matching_devices else None
 
 def monitor_battery():
     while True:
         try:
-            battery_report = getBatteryPercentage()
-
-            if(not isErrorMessage(battery_report)):
-                battery_percentage = battery_report.replace('%','').rstrip()
-                if int(battery_percentage) > 30:
-                    batteryReportStage = 0
-                elif int(battery_percentage) <= 30 and batteryReportStage != 1:
-                    batteryReportStage = 1
-                    display_notification(battery_percentage)
-                elif int(battery_percentage) <= 10 and batteryReportStage != 2:
-                    batteryReportStage = 2
-                    display_notification_critical(battery_percentage)
-            else:
-                logErrorOnline(battery_report)
+            get_battery_status(False)
         except Exception as e:
-            logErrorOnline(e)
-        
+            logOnline(e)
         finally:
             time.sleep(600)  # Check every 10 minute
 
+def get_battery_status(forcePushNotification = True):
+    device_info = find_device()
+    if not device_info:
+        toast("Wireless Mouse Battery", "No matching device found!", duration='short')
+        return
 
+    device = hid.device()
+    device.open_path(device_info['path'])
 
+    # Determine if the mouse is wired based on the product ID
+    wired = device_info['product_id'] == 0x2011
 
-def monitor_battery_once():
-        battery_report = getBatteryPercentage()
+    # Prepare and send the feature report
+    bfr_w = [0] * 65
+    bfr_w[3] = 0x02
+    bfr_w[4] = 0x02
+    bfr_w[6] = 0x83
+    device.send_feature_report(bfr_w)
 
-        if(not isErrorMessage(battery_report)):
-            battery_percentage = battery_report.replace('%','').rstrip()
-            print(battery_percentage)
-            if int(battery_percentage) > 30:
-                display_notification(battery_percentage)
-                batteryReportStage = 0
-            elif int(battery_percentage) <= 30 and batteryReportStage != 1:
-                batteryReportStage = 1
-                display_notification(battery_percentage)
-            elif int(battery_percentage) <= 10 and batteryReportStage != 2:
-                batteryReportStage = 2
-                display_notification_critical(battery_percentage)
+    # Wait for 50 milliseconds
+    time.sleep(0.05)
+
+    # Read the feature report
+    bfr_r = device.get_feature_report(0, 65)
+
+    # Process the report
+    percentage = max(bfr_r[8], 1)
+    status = [0xA1, 0xA4, 0xA2, 0xA0, 0xA3].index(bfr_r[1]) if bfr_r[6] == 0x83 else 2
+
+    currentReportStage =-1
+    displaymessage = ""
+    # Display the battery status
+    if status == 0 and not wired:
+        if percentage <= 24:
+            currentReportStage = 0
+        elif 25 <= percentage <= 74:
+            currentReportStage = 1
         else:
-            logErrorOnline(battery_report)
+            currentReportStage = 2
+        displaymessage = "Current Battery status:\n{}%".format(percentage)
+    elif status == 0 and wired:
+        if percentage <= 24:
+            currentReportStage = 0
+        elif 25 <= percentage <= 74:
+            currentReportStage = 1
+        else:
+            currentReportStage = 2
+        displaymessage = "Current Battery status:\n{}%(Wired)".format(percentage)
+    elif status == 1:
+        displaymessage = "Mouse Disconnected/asleep"
+    elif status == 3:
+        displaymessage = "Mouse waking up..."
+    else:
+        logOnline(f"unknown status : [1:{bfr_r[1]:02X}, 6:{bfr_r[6]:02X}, 8:{bfr_r[8]:02X}]")
 
-def getBatteryPercentage():
-    # Define the command and arguments
-    command = 'mow.exe'
-    arg1 = 'report'
-    arg2 = 'battery'
+    if(forcePushNotification or (currentReportStage != -1 and currentReportStage != batteryReportStage)):
+        batteryReportStage = currentReportStage
+        toast("Wireless Mouse Battery", displaymessage, duration='short')
 
-    # Execute the command and capture the output
-    startupinfo = subprocess.STARTUPINFO()
-    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-    process = subprocess.Popen([command, arg1, arg2], stdout=subprocess.PIPE, stderr=subprocess.PIPE,startupinfo=startupinfo)
-    stdout,stderr = process.communicate()
+    device.close()
 
-    # Decode the output from bytes to string
-    stdout = stdout.decode('utf-8')
-    stderr = stderr.decode('utf-8')
-
-    if(stderr):
-        logErrorOnline(stderr)
-
-    return stdout
-
-def isErrorMessage(inputString):
-    return any(char.isalpha() for char in inputString)
-
-def logErrorOnline(error):
+def logOnline(message):
     print("logging online now")
     # Step 1: Get the current file content
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
@@ -107,7 +126,7 @@ def logErrorOnline(error):
     # Step 2: Append text and encode to base64
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     windows_username = getpass.getuser()  # Retrieve Windows username
-    new_message = f"{timestamp} - {windows_username} - {error} \n"
+    new_message = f"{timestamp} - {windows_username} - {message} \n"
     
     new_content = current_content + new_message
     new_content_base64 = base64.b64encode(new_content.encode("utf-8")).decode("utf-8")
@@ -128,4 +147,33 @@ def logErrorOnline(error):
     else:
         print("Error:", response.status_code)
 
-monitor_battery()
+def exit_program():
+    logOnline("Stop Program")
+    tray_icon.stop()  # Stop the system tray application
+    os.kill(os.getpid(), signal.SIGTERM)  # Terminate the process
+
+def main():
+    global tray_icon
+    logOnline("Start Program")
+
+    script_directory = os.path.dirname(os.path.abspath(__file__))
+    icon_image = Image.open(script_directory + "\\Icon.ico")
+
+    # Define menu items for both left-click and right-click context menus
+    menu = (
+        pystray.MenuItem("Display Status Now", get_battery_status),
+        pystray.MenuItem("Exit", exit_program),
+    )
+
+    # Create the tray icon
+    tray_icon = pystray.Icon("Mouse Battery Reporter", icon_image, "Mouse Battery Reporter", menu)
+
+    # Start the tray icon in a separate thread
+    tray_thread = threading.Thread(target=tray_icon.run)
+    tray_thread.start()
+
+    # Start the battery monitoring in the main thread
+    monitor_battery()
+
+if __name__ == "__main__":
+    main()
