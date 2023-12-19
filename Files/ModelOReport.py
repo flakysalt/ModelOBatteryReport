@@ -16,7 +16,7 @@ batteryReportStage = -1
 REPO_OWNER="flakysalt"
 REPO_NAME="ModelOLogging"
 FILE_PATH="Log.txt"
-GITHUB_TOKEN="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"
+GITHUB_TOKEN="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"
 
 
 def find_device():
