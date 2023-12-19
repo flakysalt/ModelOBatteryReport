@@ -81,24 +81,27 @@ def get_battery_status(forcePushNotification = True):
     status = [0xA1, 0xA4, 0xA2, 0xA0, 0xA3].index(bfr_r[1]) if bfr_r[6] == 0x83 else 2
 
     currentReportStage =-1
-    displaymessage = ""
+    displaymessage = "Current Battery status:\n{}%".format(percentage)
     # Display the battery status
     if status == 0 and not wired:
-        if percentage <= 24:
+        if percentage <= 25:
             currentReportStage = 0
-        elif 25 <= percentage <= 74:
+        elif 24 <= percentage <= 15:
             currentReportStage = 1
-        else:
+        elif 14 <= percentage <= 5:
             currentReportStage = 2
-        displaymessage = "Current Battery status:\n{}%".format(percentage)
+        else:
+            currentReportStage = 3
     elif status == 0 and wired:
-        if percentage <= 24:
+        if percentage <= 25:
             currentReportStage = 0
-        elif 25 <= percentage <= 74:
+        elif 24 <= percentage <= 15:
             currentReportStage = 1
-        else:
+        elif 14 <= percentage <= 5:
             currentReportStage = 2
-        displaymessage = "Current Battery status:\n{}%(Wired)".format(percentage)
+        else:
+            currentReportStage = 3
+        displaymessage =displaymessage + "(Wired)"
     elif status == 1:
         displaymessage = "Mouse Disconnected/asleep"
     elif status == 3:
@@ -107,7 +110,7 @@ def get_battery_status(forcePushNotification = True):
         logOnline(f"unknown status : [1:{bfr_r[1]:02X}, 6:{bfr_r[6]:02X}, 8:{bfr_r[8]:02X}]")
 
     global batteryReportStage
-    if(forcePushNotification or (currentReportStage != -1 and currentReportStage != batteryReportStage)):
+    if(forcePushNotification or (status == 0  and currentReportStage != batteryReportStage)):
         batteryReportStage = currentReportStage
         toast("Wireless Mouse Battery", displaymessage, duration='short')
 
