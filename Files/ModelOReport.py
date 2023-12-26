@@ -4,6 +4,8 @@ import os
 import threading
 import hid
 import signal
+import serial
+import serial.tools.list_ports
 from PIL import Image
 
 from win11toast import toast
@@ -30,8 +32,38 @@ def find_device():
     # Sort devices by product_id
     matching_devices.sort(key=lambda d: d['product_id'])
 
-    # Return the first matching device or None if no device is found
+    # Return the first matching device or None if no device is founds
     return matching_devices[0] if matching_devices else None
+
+def find_arduino(serial_number=None):
+    """Attempts to find an Arduino's serial port."""
+    # Typical Arduino Uno VID and PID, adjust these as necessary
+    ARDUINO_VID = '2341'
+    ARDUINO_PID = '0043'
+
+    ports = list(serial.tools.list_ports.comports())
+    for port in ports:
+        if ARDUINO_VID and ARDUINO_PID in port.hwid:
+            # Optionally match against a specific serial number
+            if serial_number and serial_number not in port.serial_number:
+                continue
+            return port.device
+    return None  # No Arduino found
+
+def send_number(arduino_com_port, number):
+    """Sends a number to the Arduino via the serial port."""
+    try:
+        # Set up serial connection (adjust baud rate to match Arduino code)
+        ser = serial.Serial(arduino_com_port, 9600, timeout=1)
+        time.sleep(2)  # give some time for connection to establish
+
+        # Convert the number to a string and encode to bytes, then send it
+        ser.write(str(number).encode())
+        time.sleep(1)  # wait for data to be sent
+
+        ser.close()  # close the serial connection
+    except Exception as e:
+        logOnline(f"Arduino: Error sending data: {e}")
 
 def monitor_battery():
     while True:
@@ -106,6 +138,47 @@ def get_battery_status(forcePushNotification = True):
         toast("Wireless Mouse Battery", displaymessage, duration='short')
 
     device.close()
+
+    arduino_com_port = find_arduino()
+
+    if arduino_com_port:
+        send_number(arduino_com_port, percentage)
+
+
+def logOnline(message):
+    print("logging online now")
+    # Step 1: Get the current file content
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    response = requests.get(f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{FILE_PATH}",
+                            headers=headers)
+
+    response_json = response.json()
+    current_content = base64.b64decode(response_json["content"]).decode("utf-8")
+    current_sha = response_json["sha"]
+
+    # Step 2: Append text and encode to base64
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    windows_username = getpass.getuser()  # Retrieve Windows username
+    new_message = f"{timestamp} - {windows_username} - {message} \n"
+    
+    new_content = current_content + new_message
+    new_content_base64 = base64.b64encode(new_content.encode("utf-8")).decode("utf-8")
+
+    # Step 3: Update the file content
+    data = {
+        "message": "Append text to file",
+        "content": new_content_base64,
+        "sha": current_sha
+    }
+
+    response = requests.put(f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{FILE_PATH}",
+                            json=data,
+                            headers=headers)
+
+    if response.status_code == 200:
+        print("File content updated successfully.")
+    else:
+        print("Error:", response.status_code)
 
 def exit_program():
     tray_icon.stop()  # Stop the system tray application
