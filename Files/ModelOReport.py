@@ -17,6 +17,7 @@ batteryReportStage = -1
 REPO_OWNER="flakysalt"
 REPO_NAME="ModelOLogging"
 FILE_PATH="Log.txt"
+BRANCH="error_logging"
 GITHUB_TOKEN="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"
 
 
@@ -140,6 +141,7 @@ def logOnline(message):
     data = {
         "message": "Append text to file",
         "content": new_content_base64,
+        "branch":BRANCH,
         "sha": current_sha
     }
 
