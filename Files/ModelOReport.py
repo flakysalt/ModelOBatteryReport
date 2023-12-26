@@ -149,7 +149,7 @@ def logOnline(message):
     print("logging online now")
     # Step 1: Get the current file content
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    response = requests.get(f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{FILE_PATH}",
+    response = requests.get(f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{FILE_PATH}?ref={BRANCH}",
                             headers=headers)
 
     response_json = response.json()
@@ -168,7 +168,7 @@ def logOnline(message):
     data = {
         "message": "Append text to file",
         "content": new_content_base64,
-        "branch":"error_logging",
+        "branch":BRANCH,
         "sha": current_sha
     }
 
