@@ -132,17 +132,17 @@ def get_battery_status(forcePushNotification = True):
     else:
         print(f"unknown status : [1:{bfr_r[1]:02X}, 6:{bfr_r[6]:02X}, 8:{bfr_r[8]:02X}]")
 
+    arduino_com_port = find_arduino()
+
+    if arduino_com_port:
+        send_number(arduino_com_port, percentage)
+
     global batteryReportStage
     if(forcePushNotification or (status == 0  and currentReportStage != batteryReportStage)):
         batteryReportStage = currentReportStage
         toast("Wireless Mouse Battery", displaymessage, duration='short')
 
     device.close()
-
-    arduino_com_port = find_arduino()
-
-    if arduino_com_port:
-        send_number(arduino_com_port, percentage)
 
 
 def logOnline(message):
@@ -168,6 +168,7 @@ def logOnline(message):
     data = {
         "message": "Append text to file",
         "content": new_content_base64,
+        "branch":"error_logging",
         "sha": current_sha
     }
 
