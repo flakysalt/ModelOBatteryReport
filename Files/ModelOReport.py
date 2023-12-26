@@ -7,6 +7,7 @@ import pystray
 import os
 import threading
 import hid
+import signal
 from PIL import Image
 
 from win11toast import toast
