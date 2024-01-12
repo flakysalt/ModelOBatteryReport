@@ -4,6 +4,8 @@ import os
 import threading
 import hid
 import signal
+import serial
+import serial.tools.list_ports
 from PIL import Image
 
 from win11toast import toast
@@ -30,8 +32,38 @@ def find_device():
     # Sort devices by product_id
     matching_devices.sort(key=lambda d: d['product_id'])
 
-    # Return the first matching device or None if no device is found
+    # Return the first matching device or None if no device is founds
     return matching_devices[0] if matching_devices else None
+
+def find_arduino(serial_number=None):
+    """Attempts to find an Arduino's serial port."""
+    # Typical Arduino Uno VID and PID, adjust these as necessary
+    ARDUINO_VID = '2341'
+    ARDUINO_PID = '0043'
+
+    ports = list(serial.tools.list_ports.comports())
+    for port in ports:
+        if ARDUINO_VID and ARDUINO_PID in port.hwid:
+            # Optionally match against a specific serial number
+            if serial_number and serial_number not in port.serial_number:
+                continue
+            return port.device
+    return None  # No Arduino found
+
+def send_number(arduino_com_port, number):
+    """Sends a number to the Arduino via the serial port."""
+    try:
+        # Set up serial connection (adjust baud rate to match Arduino code)
+        ser = serial.Serial(arduino_com_port, 9600, timeout=1)
+        time.sleep(2)  # give some time for connection to establish
+
+        # Convert the number to a string and encode to bytes, then send it
+        ser.write(str(number).encode())
+        time.sleep(1)  # wait for data to be sent
+
+        ser.close()  # close the serial connection
+    except Exception as e:
+        print(f"Arduino: Error sending data: {e}")
 
 def monitor_battery():
     while True:
@@ -99,6 +131,11 @@ def get_battery_status(forcePushNotification = True):
         displaymessage = "Mouse waking up..."
     else:
         print(f"unknown status : [1:{bfr_r[1]:02X}, 6:{bfr_r[6]:02X}, 8:{bfr_r[8]:02X}]")
+
+    arduino_com_port = find_arduino()
+
+    if arduino_com_port:
+        send_number(arduino_com_port, percentage)
 
     global batteryReportStage
     if(forcePushNotification or (status == 0  and currentReportStage != batteryReportStage)):
