@@ -1,8 +1,4 @@
 import time
-import requests
-import base64
-import datetime
-import getpass
 import pystray
 import os
 import threading
@@ -13,13 +9,6 @@ from PIL import Image
 from win11toast import toast
 
 batteryReportStage = -1
-
-REPO_OWNER="flakysalt"
-REPO_NAME="ModelOLogging"
-FILE_PATH="Log.txt"
-BRANCH="error_logging"
-GITHUB_TOKEN="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"
-
 
 def find_device():
     # Define the criteria
@@ -49,7 +38,7 @@ def monitor_battery():
         try:
             get_battery_status(False)
         except Exception as e:
-            logOnline(e)
+            print(e)
         finally:
             time.sleep(600)  # Check every 10 minute
 
@@ -103,13 +92,13 @@ def get_battery_status(forcePushNotification = True):
             currentReportStage = 2
         else:
             currentReportStage = 3
-        displaymessage =displaymessage + "(Wired)"
+        displaymessage = displaymessage + "(Wired)"
     elif status == 1:
         displaymessage = "Mouse Disconnected/asleep"
     elif status == 3:
         displaymessage = "Mouse waking up..."
     else:
-        logOnline(f"unknown status : [1:{bfr_r[1]:02X}, 6:{bfr_r[6]:02X}, 8:{bfr_r[8]:02X}]")
+        print(f"unknown status : [1:{bfr_r[1]:02X}, 6:{bfr_r[6]:02X}, 8:{bfr_r[8]:02X}]")
 
     global batteryReportStage
     if(forcePushNotification or (status == 0  and currentReportStage != batteryReportStage)):
@@ -118,51 +107,12 @@ def get_battery_status(forcePushNotification = True):
 
     device.close()
 
-def logOnline(message):
-    print("logging online now")
-    # Step 1: Get the current file content
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    response = requests.get(f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{FILE_PATH}?ref={BRANCH}",
-                            headers=headers)
-
-    response_json = response.json()
-    current_content = base64.b64decode(response_json["content"]).decode("utf-8")
-    current_sha = response_json["sha"]
-
-    # Step 2: Append text and encode to base64
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    windows_username = getpass.getuser()  # Retrieve Windows username
-    new_message = f"{timestamp} - {windows_username} - {message} \n"
-    
-    new_content = current_content + new_message
-    new_content_base64 = base64.b64encode(new_content.encode("utf-8")).decode("utf-8")
-
-    # Step 3: Update the file content
-    data = {
-        "message": "Append text to file",
-        "content": new_content_base64,
-        "branch":BRANCH,
-        "sha": current_sha
-    }
-
-    response = requests.put(f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{FILE_PATH}",
-                            json=data,
-                            headers=headers)
-
-    if response.status_code == 200:
-        print("File content updated successfully.")
-    else:
-        print("Error:", response.status_code)
-
 def exit_program():
-    logOnline("Stop Program")
     tray_icon.stop()  # Stop the system tray application
     os.kill(os.getpid(), signal.SIGTERM)  # Terminate the process
 
 def main():
     global tray_icon
-    logOnline("Start Program")
-
     script_directory = os.path.dirname(os.path.abspath(__file__))
     icon_image = Image.open(script_directory + "\\Icon.ico")
 
