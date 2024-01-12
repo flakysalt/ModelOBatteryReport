@@ -63,7 +63,7 @@ def send_number(arduino_com_port, number):
 
         ser.close()  # close the serial connection
     except Exception as e:
-        logOnline(f"Arduino: Error sending data: {e}")
+        print(f"Arduino: Error sending data: {e}")
 
 def monitor_battery():
     while True:
@@ -143,43 +143,6 @@ def get_battery_status(forcePushNotification = True):
         toast("Wireless Mouse Battery", displaymessage, duration='short')
 
     device.close()
-
-
-def logOnline(message):
-    print("logging online now")
-    # Step 1: Get the current file content
-    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    response = requests.get(f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{FILE_PATH}?ref={BRANCH}",
-                            headers=headers)
-
-    response_json = response.json()
-    current_content = base64.b64decode(response_json["content"]).decode("utf-8")
-    current_sha = response_json["sha"]
-
-    # Step 2: Append text and encode to base64
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    windows_username = getpass.getuser()  # Retrieve Windows username
-    new_message = f"{timestamp} - {windows_username} - {message} \n"
-    
-    new_content = current_content + new_message
-    new_content_base64 = base64.b64encode(new_content.encode("utf-8")).decode("utf-8")
-
-    # Step 3: Update the file content
-    data = {
-        "message": "Append text to file",
-        "content": new_content_base64,
-        "branch":BRANCH,
-        "sha": current_sha
-    }
-
-    response = requests.put(f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/contents/{FILE_PATH}",
-                            json=data,
-                            headers=headers)
-
-    if response.status_code == 200:
-        print("File content updated successfully.")
-    else:
-        print("Error:", response.status_code)
 
 def exit_program():
     tray_icon.stop()  # Stop the system tray application
