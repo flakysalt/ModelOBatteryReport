@@ -1,0 +1,71 @@
+import time
+import hid
+
+def find_device():
+    # Define the criteria
+    vendor_id = 0x258A  # Glorious' vendor id
+    product_ids = [0x2011, 0x2022]  # Model O product ids
+    interface_number = 2  # Feature report interface
+
+    # Get all connected HID devices
+    all_devices = hid.enumerate()
+
+    # Filter devices based on the criteria
+    matching_devices = [
+        d for d in all_devices
+        if d['vendor_id'] == vendor_id and
+        d['product_id'] in product_ids and
+        d['interface_number'] == interface_number
+    ]
+
+    # Sort devices by product_id
+    matching_devices.sort(key=lambda d: d['product_id'])
+
+    # Return the first matching device or None if no device is found
+    return matching_devices[0] if matching_devices else None
+
+def get_battery_status():
+    device_info = find_device()
+    if not device_info:
+        print("No matching device found!")
+        return
+
+    device = hid.device()
+    device.open_path(device_info['path'])
+
+    # Determine if the mouse is wired based on the product ID
+    wired = device_info['product_id'] == 0x2011
+
+    # Prepare and send the feature report
+    bfr_w = [0] * 65
+    bfr_w[3] = 0x02
+    bfr_w[4] = 0x02
+    bfr_w[6] = 0x83
+    device.send_feature_report(bfr_w)
+
+    # Wait for 50 milliseconds
+    time.sleep(0.05)
+
+    # Read the feature report
+    bfr_r = device.get_feature_report(0, 65)
+
+    # Process the report
+    percentage = max(bfr_r[8], 1)
+    status = [0xA1, 0xA4, 0xA2, 0xA0, 0xA3].index(bfr_r[1]) if bfr_r[6] == 0x83 else 2
+
+    # Display the battery status
+    if status == 0 and not wired:
+        print(f"{percentage}%")
+    elif status == 0 and wired:
+        print(f"wired | {percentage}%")
+    elif status == 1:
+        print("(asleep)")
+    elif status == 3:
+        print("(waking up)")
+    else:
+        print(f"unknown status : [1:{bfr_r[1]:02X}, 6:{bfr_r[6]:02X}, 8:{bfr_r[8]:02X}]")
+
+    device.close()
+
+# Example usage
+get_battery_status()
